@@ -1,10 +1,11 @@
 // Tiny no-framework test runner — run with: node web/game.test.js
 // Imports the pure logic modules (no React) and ports the GameTest.kt cases.
 
-import { Game, Result } from "./Game.js";
+import { Game, Result, DEFAULTS } from "./Game.js";
 import { HumanPlayer } from "./players/HumanPlayer.js";
 import { RandomAiPlayer } from "./players/RandomAiPlayer.js";
 import { PerfectAiPlayer } from "./players/PerfectAiPlayer.js";
+import { OPENING_BOOK, OPENING_BOOK_CONFIG } from "./players/openingBook.js";
 
 let failures = 0;
 
@@ -87,6 +88,51 @@ function playAll(game, str) {
   assertEquals(true, rm === "X" || rm === "O", "player: random returns X or O");
   const pm = perfect.chooseMove(g);
   assertEquals(true, pm === "X" || pm === "O", "player: perfect returns X or O");
+}
+
+// 8. Opening book covers the default rules and only holds legal moves.
+{
+  assertEquals(JSON.stringify(DEFAULTS), JSON.stringify(OPENING_BOOK_CONFIG), "book: config matches DEFAULTS");
+  assertEquals("X", OPENING_BOOK[""], "book: opening move for empty board is X");
+  const states = Object.keys(OPENING_BOOK);
+  assertEquals(true, states.length > 100, "book: has many entries (" + states.length + ")");
+  assertEquals(true, states.every((s) => OPENING_BOOK[s] === "X" || OPENING_BOOK[s] === "O"), "book: every move is X or O");
+}
+
+// 9. On the default rules the Perfect AI plays from the book (not randomly).
+{
+  const perfect = new PerfectAiPlayer();
+  const mark = perfect.chooseMove(new Game());
+  assertEquals("X", mark, "book: perfect AI opens with the book move");
+  assertEquals(false, perfect.lastMoveWasRandom, "book: opening move is not flagged random");
+}
+
+// 10. When the tree is too deep to resolve within MAX_DEPTH, the Perfect AI
+//     admits it: it picks a move at random and flags lastMoveWasRandom.
+{
+  const perfect = new PerfectAiPlayer();
+  // Length-20 patterns can't form in 20 plies, so every line hits the depth cap
+  // as an unresolved 0 — no book covers these rules either.
+  const deep = new Game({ p1Length: 20, p1Repeats: 10, p2Length: 20, p2Repeats: 10 });
+  const mark = perfect.chooseMove(deep);
+  assertEquals(true, mark === "X" || mark === "O", "depth cap: returns a legal mark");
+  assertEquals(true, perfect.lastMoveWasRandom, "depth cap: flags the move as random");
+}
+
+// 11. Book + search play the default opening perfectly: Player 1 has a forced
+//     win, so a Perfect P1 always beats a Random P2.
+{
+  let p1Wins = 0;
+  for (let i = 0; i < 10; i++) {
+    const g = new Game();
+    const p1 = new PerfectAiPlayer();
+    const p2 = new RandomAiPlayer();
+    while (g.result() === Result.NOT_FINISHED && g.state.length < 100) {
+      g.makeMove((g.isPlayer1Turn ? p1 : p2).chooseMove(g));
+    }
+    if (g.result() === Result.PLAYER_1_WIN) p1Wins++;
+  }
+  assertEquals(10, p1Wins, "book: Perfect P1 wins all 10 games vs Random P2");
 }
 
 if (failures === 0) {

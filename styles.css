@@ -143,6 +143,18 @@ input:focus, select:focus {
   min-height: 1.3em;
 }
 
+.warning {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  text-align: center;
+  color: #ffd27c;
+  background: rgba(247, 160, 114, 0.12);
+  border: 1px solid rgba(247, 160, 114, 0.4);
+}
+
 .board {
   display: flex;
   flex-wrap: wrap;

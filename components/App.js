@@ -12,6 +12,10 @@ export function App() {
   const [phase, setPhase] = useState("setup"); // "setup" | "play"
   const [game, setGame] = useState(null);
   const [players, setPlayers] = useState({ 1: createPlayer("human"), 2: createPlayer("perfect") });
+  // Names the Perfect AI whose *latest* move couldn't be resolved within its
+  // depth limit (so it played at random). Persists across the opponent's moves
+  // and only clears when that AI next makes an exact, fully-resolved move.
+  const [aiWarning, setAiWarning] = useState(null);
 
   const current = game && !game.isPlayer1Turn ? 2 : 1;
   const currentPlayer = players[current];
@@ -22,12 +26,14 @@ export function App() {
   function startGame(cfg, p1Mode, p2Mode) {
     setPlayers({ 1: createPlayer(p1Mode), 2: createPlayer(p2Mode) });
     setGame(new Game(cfg));
+    setAiWarning(null);
     setPhase("play");
   }
 
   function newGame() {
     setPhase("setup");
     setGame(null);
+    setAiWarning(null);
   }
 
   function applyMove(mark) {
@@ -40,6 +46,8 @@ export function App() {
 
   function humanMove(mark) {
     if (!game || over || !human) return;
+    // Leave any AI warning in place — it reflects the AI's last move and should
+    // only change when the AI moves again, not when the human plays.
     applyMove(mark);
   }
 
@@ -48,7 +56,12 @@ export function App() {
   // replaces the old moveToken guard against stale timers on New game).
   useEffect(() => {
     if (phase !== "play" || !game || over || human) return;
-    const id = setTimeout(() => applyMove(currentPlayer.chooseMove(game)), 50);
+    const id = setTimeout(() => {
+      const mark = currentPlayer.chooseMove(game);
+      // The Perfect AI sets this when it hit its depth limit and picked randomly.
+      setAiWarning(currentPlayer.lastMoveWasRandom ? playerName(current) : null);
+      applyMove(mark);
+    }, 200);
     return () => clearTimeout(id);
   }, [game, players, phase, over, human]);
 
@@ -59,7 +72,7 @@ export function App() {
 
   function statusText() {
     if (over) return "Game over";
-    return playerName(current) + "'s turn" + (human ? " — choose a mark" : " — thinking…");
+    return playerName(current) + "'s turn";
   }
 
   function resultText() {
@@ -79,6 +92,11 @@ export function App() {
           : html`
             <div>
               <div className="status">${statusText()}</div>
+              ${aiWarning
+                ? html`<div className="warning" role="alert">
+                    ⚠️ ${aiWarning} can't calculate a perfect move at this search depth, so it's playing at random until the game is shallow enough to solve exactly.
+                  </div>`
+                : null}
               <${Board} game=${game} />
               <div className="controls">
                 <button className="btn tileX" disabled=${over || !human} onClick=${() => humanMove("X")}>Place X</button>
